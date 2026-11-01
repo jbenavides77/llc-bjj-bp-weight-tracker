@@ -7,28 +7,18 @@
 <meta name="description" content="Weekly weigh-ins for LLC BP Jiujitsu athletes, tracked against each athlete's competition target weight.">
 <style>
   :root {
-    color-scheme: light;
-    --color-bg: #f6f7f9; --color-panel: #ffffff; --color-fg: #1b1f27; --color-fg-muted: #5d6573;
-    --color-border-line: #e1e4ea; --color-ok: #1f7a4d; --color-warn: #a35a00; --color-bad: #c2362b;
-    --cds-surface-popover: #ffffff; --cds-border: #d7dbe2; --cds-text-secondary: #5d6573;
-    --cds-shadow-popover: 0 6px 20px rgba(20, 25, 35, .12);
-    --cds-chart-grid: #eceef2; --cds-chart-axis: #c5cad3; --cds-chart-reference: #8a919e; --cds-chart-muted: #b5bac4;
-    --c1: #2f6fde; --c2: #e0662f; --c3: #1f9d74; --c4: #b0428f; --c5: #c79a00; --c6: #6b54d6; --c7: #d1374f; --c8: #2a9bb5;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --color-bg: #12151b; --color-panel: #1a1e26; --color-fg: #e9ecf1; --color-fg-muted: #9aa2b1;
-      --color-border-line: #2b313c; --color-ok: #4cc38a; --color-warn: #f0a243; --color-bad: #ff6b5e;
-      --cds-surface-popover: #222733; --cds-border: #353c49; --cds-text-secondary: #9aa2b1;
-      --cds-shadow-popover: 0 6px 20px rgba(0, 0, 0, .45);
-      --cds-chart-grid: #232833; --cds-chart-axis: #3a414e; --cds-chart-reference: #8a92a0; --cds-chart-muted: #4a5160;
-      --c1: #6b9cff; --c2: #ff8a52; --c3: #3ccf9c; --c4: #e070c0; --c5: #f0c43c; --c6: #9a86ff; --c7: #ff6b7f; --c8: #4fc6e0;
-    }
+    color-scheme: dark;
+    --hk-green: #b5e853; --hk-glow: 0 1px 1px rgba(0,0,0,.1), 0 0 5px rgba(181,232,83,.1), 0 0 10px rgba(181,232,83,.1);
+    --color-bg: #151515; --color-panel: rgba(0, 0, 0, .45); --color-fg: #eaeaea; --color-fg-muted: #999;
+    --color-border-line: rgba(181, 232, 83, .28); --color-ok: #b5e853; --color-warn: #f4bf75; --color-bad: #ef6a6b;
+    --cds-surface-popover: #0b0b0b; --cds-border: #b5e853; --cds-text-secondary: #999;
+    --cds-shadow-popover: 0 0 12px rgba(181, 232, 83, .18);
+    --cds-chart-grid: rgba(255, 255, 255, .07); --cds-chart-axis: #666; --cds-chart-reference: #888; --cds-chart-muted: #555;
+    --c1: #6a9fb5; --c2: #f4bf75; --c3: #aa759f; --c4: #90a959; --c5: #d28445; --c6: #75b5aa; --c7: #ef6a6b; --c8: #d0d0d0;
   }
   :root {
-    --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-anthropic-serif: Georgia, "Times New Roman", serif;
+    --font-anthropic-sans: Monaco, "Bitstream Vera Sans Mono", "Lucida Console", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    --font-anthropic-serif: var(--font-anthropic-sans);
     --cds-font-size-caption: .8125rem; --cds-font-size-body: .9375rem; --cds-font-size-heading: 1.0625rem; --cds-font-size-title: 2rem;
     --cds-font-weight-medium: 600;
     --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 16px; --cds-gap-lg: 24px; --cds-gap-xl: 36px;
@@ -37,7 +27,7 @@
   }
   * { box-sizing: border-box; }
   html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-  body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 14px; line-height: 1.45; }
+  body { margin: 0; background: var(--color-bg) url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAhQAAAIUAQMAAAB4tCemAAAABlBMVEUaGhobGxsh/u4NAAAEd0lEQVR4Xu3cPbKrMAwFYFOlZQdZqlkqS6BMFb2gHx/pZl6pVMcFk9yLvzQejZBlxjEeInKOTUTkPT5jk+N5f3qKyHH/YZ73df1N6tdjty9T4v7xfI0xlTwfN/T6kOPxvqH4JK9w7R/tBg0axzDwY+jKtUlqqHnPVBfk82Uz4pZ2gwYNDcd2yWtY1lqP9b8iNpa+jmNvN2jQQHDVMRUSRGIl7X4lNViLHBYt1P2hQYPGPBF/hxm+zG3S0k6f7j94dRs0aHjURQKBRy5RDctclHToSFnEbwwaNKBh6SOByBFbxMODrOrB3m7QoDHPXAaoaYOF43sEme6TFbG7DRo0Im14eLlAMNMSiLF5McGXvqCi4GNvN2jQkNMMLO53CtEDM59SAjOyjX6DBg08fEUNVqdvehdwn+5a/dV2gwYN1FalQD4TLgKzz0Si223QoJEnoVvgVYsJ9YFMvFwQta12gwaNqLeKFO0NA8WsPFNkRed+gwaNv3tV9zBfAdUkLtg6QBq89xs0aHj8Xb2B/mgWuMh/uloEOW63QYMG2v0QhGt6ixJCWfWrcLC3GzRoRO66rf0rNAiWZKHUwPw+g9oNGjRy7oowm7MDH+bmYB29gf0GDRoehGu5ChsGgk+3mxZ8bIBd7QYNGpm2LoDaIKjjURNdUWMF63aDBg0fcf+UeCqb0LD+PSbHD+pPX90GDRr3pDDQw6ozfVJEYnyNOO1z93aDBo3DpteGKnEI21noIbQLxjy7DRo0POBiEg6u4nQKsgM0ueAIYbtBg4ZWVJHFImPwgcoXKgp+X+x9Xd0GDRr5bD8gb2iJPiyD0BZobkCj3aBBA41/er9/ten6CYXYWoONX5Cr26BBA09bKByogS7Bep4KRS986jdo0EANVjUb2RhY4ch7BSlHv0GDBnr9UeVatw7UYG0mjgiEceztBg0ac61mpLz5kitfvv7tb7i0GzRoIG3QT/kxLCJxXeFIecNtN2jQQEegfB2wds0GcgdUGfSytxs0aES3Ss1xzcWhlnpspbZjj26DBg0deHmar+G8f7DV/djagnXj/QYNGticqlUuERylwj4rBipfV7tBg4YI3kyVX1ihBqqsquG38rPY3m7QoHE803OXhBaTUAiob6vKsbvfoEFjnisTgF/aApUsK9xGJBVXu0GDBo78QZt+wWsp10X/EYYovrcbNGjgZJWokY+olBLWKC0DU5BKtBs0aIipHoRrzUpd/Dd+ywz0sLYbNGhMVLRKlUu1wNGEjdenrgRi7zZo0DBLkCzEKymyJjGQ/CIh7jdo0KgvmazlAmzAWohW7V03wH5k0KDhRQKlaysAOlgQhPHa6ojY/QYNGmgFOGKFq5+TBQRmhb5OCnYbNGikcCw6QquTPLPFOQGcD+w3aNAQVFTxFnV0WvlXJBXhYteg26BBo/Tz53rrKrXipf7LrYWDebUbNGgMHKZOrf9IFrBDYLhezMU5rV6DBo3s59x1tbSqq1rKhSXHiKvdoEHj601/5fkMuwZ1wyBwjdP/ACfy2vdF7+1uAAAAAElFTkSuQmCC) 0 0; -webkit-font-smoothing: antialiased; color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 14px; line-height: 1.45; }
   #dash-root { max-width: 1200px; margin-inline: auto; padding-block: 28px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   [hidden] { display: none !important; }
   .dash-skeleton:empty, .dash-skeleton { color: transparent !important; }
@@ -132,7 +122,7 @@
     const box = document.getElementById('bp-error');
     if (box) { box.hidden = !errs.length; box.textContent = errs.length ? "Couldn't load the Google Sheet (" + errs.join('; ') + '). Check that it is shared as "Anyone with the link can view".' : ''; }
     const at = document.getElementById('bp-loaded');
-    if (at) at.textContent = 'Loaded ' + new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    if (at) at.textContent = '$ last sync: ' + new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
     redraw();
   };
 
@@ -832,9 +822,43 @@
 <footer class="bp-foot">
   <span id="bp-loaded">Loading…</span>
   <button type="button" id="bp-refresh">Refresh data</button>
-  <span>Data: weekly weigh-in form and athlete roster (Google Sheets).</span>
+  <span>Data: weekly weigh-in form and athlete roster (Google Sheets). Theme: <a href="https://github.com/pages-themes/hacker" target="_blank" rel="noopener">Hacker</a>.</span>
 </footer>
 </div>
+
+<style>
+  /* Hacker theme (pages-themes/hacker) overrides */
+  .bp { --bp-display: Monaco, "Bitstream Vera Sans Mono", "Lucida Console", Menlo, Consolas, monospace; }
+  .bp-head { border-bottom: 1px dashed var(--hk-green); padding-bottom: 20px; background: rgba(0,0,0,.1); }
+  .bp-title { color: var(--hk-green); text-shadow: var(--hk-glow); letter-spacing: -1px !important; font-weight: 700 !important; font-size: clamp(1.4rem, 1rem + 2vw, 2rem) !important; text-transform: none; }
+  .bp-title::before { content: "./ "; font-size: .8em; }
+  .bp .bp-sechead h2:not(.bp-name), .bp .bp-card h3 { color: var(--hk-green); text-shadow: var(--hk-glow); font-weight: 400; letter-spacing: .02em; }
+  .bp .bp-sechead h2:not(.bp-name)::before { content: "## "; opacity: .6; }
+  .bp .bp-card h3::before { content: "> "; opacity: .6; }
+  .bp-name { color: var(--hk-green); text-shadow: var(--hk-glow); }
+  .bp-big { color: #f9f9f9; letter-spacing: -.02em; }
+  .bp-big.bp-ok { color: var(--color-ok); } .bp-big.bp-warn { color: var(--color-warn); }
+  .bp-card, .bp-tile { border-style: dashed; border-radius: 2px; background: var(--color-panel); }
+  .bp th { border-bottom: 1px dashed var(--hk-green); color: #d0d0d0; }
+  .bp td { border-bottom-color: rgba(255,255,255,.06); }
+  .bp-roster tbody tr:hover td { background: rgba(181,232,83,.07); }
+  .bp-roster tr.bp-sel td { color: var(--hk-green); }
+  .bp-roster tr.bp-sel td:first-child { box-shadow: inset 3px 0 0 var(--hk-green); }
+  .bp-roster tr.bp-sel td:first-child::before { content: "> "; }
+  .bp-pill { border-radius: 2px; }
+  .bp-pick select { background: #000; border: 1px solid var(--hk-green); color: var(--hk-green); border-radius: 2px; font-family: var(--font-anthropic-sans); }
+  .bp-pick select:focus-visible, .bp-roster tbody tr:focus-visible { outline-color: var(--hk-green); }
+  .bp-legend button { color: #d0d0d0; }
+  .bp-legend button:hover, .bp-legend button:focus-visible { color: var(--hk-green); }
+  .bp-tip { border-radius: 2px; }
+  .bp-take b { color: var(--hk-green) !important; }
+  .bp-foot { border-top: 1px dashed var(--hk-green); padding-top: 14px; }
+  .bp-foot button { background: #000; color: var(--hk-green); border: 1px solid var(--hk-green); border-radius: 2px; font-family: inherit; }
+  .bp-foot button:hover { box-shadow: 0 0 8px rgba(181,232,83,.35); }
+  .bp-foot a { color: #63c0f5; text-shadow: 0 0 5px rgba(104,182,255,.5); }
+  .dash-skeleton::after { background: rgba(181,232,83,.15); }
+  ::selection { background: rgba(181,232,83,.35); }
+</style>
 <script>window.dash._start();</script>
 </body>
 </html>
