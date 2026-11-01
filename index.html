@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LLC BP Jiujitsu Weight Tracker</title>
+<meta name="description" content="Weekly weigh-ins for LLC BP Jiujitsu athletes, tracked against each athlete's competition target weight.">
+<style>
+  :root {
+    color-scheme: light;
+    --color-bg: #f6f7f9; --color-panel: #ffffff; --color-fg: #1b1f27; --color-fg-muted: #5d6573;
+    --color-border-line: #e1e4ea; --color-ok: #1f7a4d; --color-warn: #a35a00; --color-bad: #c2362b;
+    --cds-surface-popover: #ffffff; --cds-border: #d7dbe2; --cds-text-secondary: #5d6573;
+    --cds-shadow-popover: 0 6px 20px rgba(20, 25, 35, .12);
+    --cds-chart-grid: #eceef2; --cds-chart-axis: #c5cad3; --cds-chart-reference: #8a919e; --cds-chart-muted: #b5bac4;
+    --c1: #2f6fde; --c2: #e0662f; --c3: #1f9d74; --c4: #b0428f; --c5: #c79a00; --c6: #6b54d6; --c7: #d1374f; --c8: #2a9bb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --color-bg: #12151b; --color-panel: #1a1e26; --color-fg: #e9ecf1; --color-fg-muted: #9aa2b1;
+      --color-border-line: #2b313c; --color-ok: #4cc38a; --color-warn: #f0a243; --color-bad: #ff6b5e;
+      --cds-surface-popover: #222733; --cds-border: #353c49; --cds-text-secondary: #9aa2b1;
+      --cds-shadow-popover: 0 6px 20px rgba(0, 0, 0, .45);
+      --cds-chart-grid: #232833; --cds-chart-axis: #3a414e; --cds-chart-reference: #8a92a0; --cds-chart-muted: #4a5160;
+      --c1: #6b9cff; --c2: #ff8a52; --c3: #3ccf9c; --c4: #e070c0; --c5: #f0c43c; --c6: #9a86ff; --c7: #ff6b7f; --c8: #4fc6e0;
+    }
+  }
+  :root {
+    --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-anthropic-serif: Georgia, "Times New Roman", serif;
+    --cds-font-size-caption: .8125rem; --cds-font-size-body: .9375rem; --cds-font-size-heading: 1.0625rem; --cds-font-size-title: 2rem;
+    --cds-font-weight-medium: 600;
+    --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 16px; --cds-gap-lg: 24px; --cds-gap-xl: 36px;
+    --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 14px; --cds-pad-lg: 20px; --cds-pad-xl: 32px;
+    --cds-radius: 8px; --cds-dur-slow: .3s; --cds-ease-out: cubic-bezier(.2, .8, .2, 1);
+  }
+  * { box-sizing: border-box; }
+  html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 14px; line-height: 1.45; }
+  #dash-root { max-width: 1200px; margin-inline: auto; padding-block: 28px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  [hidden] { display: none !important; }
+  .dash-skeleton:empty, .dash-skeleton { color: transparent !important; }
+  .dash-skeleton { position: relative; }
+  .dash-skeleton::after { content: ""; position: absolute; inset: 0; margin: auto 0; height: min(100%, .9em); max-width: 6em; border-radius: 4px; background: var(--color-border-line); animation: bp-pulse 1.4s ease-in-out infinite; }
+  .bp-chart.dash-skeleton::after, .bp-multi.dash-skeleton::after { height: 100%; max-width: none; }
+  @keyframes bp-pulse { 50% { opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .dash-skeleton::after { animation: none; } }
+  .bp-foot { margin-top: 28px; font-size: .8125rem; color: var(--color-fg-muted); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .bp-foot button { font: inherit; color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  .bp-foot a { color: inherit; }
+  .bp-error { margin: 0 0 20px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--color-bad); color: var(--color-bad); font-size: .875rem; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+/* Minimal stand-in for the dashboard runtime: loads both sheets from Google
+   Sheets' public CSV endpoint and runs the page's calcs and drawings. */
+(function () {
+  const SHEET_ID = '1jyucpygjgYvy4uJRuI2-6j-y0K6Kx_b1D4-Lq9uDSrE';
+  const SHEETS = { responses: 'Form Responses 1', athletes: 'Sheet1' };
+  const csvUrl = (name) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(name)}&_=${Date.now()}`;
+
+  const parseCsv = (text) => {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ''));
+  };
+  const iso = (s) => {
+    s = String(s || '').trim();
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+    const p = (n) => String(n || 0).padStart(2, '0');
+    if (m) return `${m[1]}-${p(m[2])}-${p(m[3])}` + (m[4] ? `T${p(m[4])}:${p(m[5])}:${p(m[6])}` : '');
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+    if (m) return `${m[3]}-${p(m[1])}-${p(m[2])}` + (m[4] ? `T${p(m[4])}:${p(m[5])}:${p(m[6])}` : '');
+    return null;
+  };
+  const shape = {
+    responses: (rows) => {
+      const head = (rows.shift() || []).map((h) => h.trim().toLowerCase());
+      const col = (re, fb) => { const i = head.findIndex((h) => re.test(h)); return i >= 0 ? i : fb; };
+      const iTs = col(/timestamp/, 0), iName = col(/name/, 1), iKg = col(/weight/, 2), iDate = col(/^date$/, 3);
+      return rows.map((r) => { const kg = parseFloat(r[iKg]); return { timestamp: iso(r[iTs]), athlete: (r[iName] || '').trim(), weight_kg: Number.isFinite(kg) ? kg : null, date: iso(r[iDate]) }; });
+    },
+    athletes: (rows) => {
+      const h = rows.findIndex((r) => r.some((c) => /^athlete$/i.test(c.trim())));
+      if (h < 0) throw new Error('No "Athlete" column found in the roster sheet');
+      const iName = rows[h].findIndex((c) => /^athlete$/i.test(c.trim())), iT = rows[h].findIndex((c) => /target/i.test(c));
+      return rows.slice(h + 1).map((r) => { const t = iT >= 0 ? parseFloat(r[iT]) : NaN; return { athlete: (r[iName] || '').trim(), target_kg: Number.isFinite(t) ? t : null }; }).filter((r) => r.athlete);
+    },
+  };
+
+  const state = {}, calcs = [], draws = new Map();
+  let params = {};
+  const cs = () => getComputedStyle(document.documentElement);
+  const colors = () => [1, 2, 3, 4, 5, 6, 7, 8].map((i) => cs().getPropertyValue('--c' + i).trim());
+
+  const redraw = () => {
+    for (const c of calcs) {
+      const ins = c.inputs.map((id) => state[id]);
+      if (ins.some((s) => !s || s.status === 'loading')) { state[c.id] = { status: 'loading', data: [] }; continue; }
+      if (ins.some((s) => s.status !== 'ok')) { state[c.id] = { status: 'error', data: [] }; continue; }
+      try { state[c.id] = { status: 'ok', data: c.fn(...ins.map((s) => s.data)) }; }
+      catch (e) { console.error(c.id, e); state[c.id] = { status: 'error', data: [], message: e.message }; }
+    }
+    window.dash.colors = colors();
+    for (const [name, fn] of draws) {
+      document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => { try { fn(el); } catch (e) { console.error('draw', name, e); } });
+    }
+  };
+
+  const load = async () => {
+    for (const id of Object.keys(SHEETS)) state[id] = { status: 'loading', data: [] };
+    redraw();
+    const errs = [];
+    await Promise.all(Object.entries(SHEETS).map(async ([id, name]) => {
+      try {
+        const res = await fetch(csvUrl(name));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (/^\s*<!doctype html|<html/i.test(text)) throw new Error('the sheet is not shared publicly');
+        state[id] = { status: 'ok', data: shape[id](parseCsv(text)) };
+      } catch (e) { state[id] = { status: 'error', data: [], message: e.message }; errs.push(`"${name}": ${e.message}`); }
+    }));
+    const box = document.getElementById('bp-error');
+    if (box) { box.hidden = !errs.length; box.textContent = errs.length ? "Couldn't load the Google Sheet (" + errs.join('; ') + '). Check that it is shared as "Anyone with the link can view".' : ''; }
+    const at = document.getElementById('bp-loaded');
+    if (at) at.textContent = 'Loaded ' + new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    redraw();
+  };
+
+  let rt;
+  window.dash = {
+    colors: [],
+    loader: () => {},
+    calc: (id, o) => calcs.push({ id, inputs: o.inputs, fn: o.fn }),
+    draw: (name, fn) => draws.set(name, fn),
+    onData: (fn) => draws.set('__ondata' + draws.size, () => fn()),
+    data: (id) => state[id] || { status: 'loading', data: [] },
+    params: () => ({ ...params }),
+    setParams: (p) => { params = { ...params, ...p }; redraw(); },
+    resetParams: () => { params = {}; redraw(); },
+    setLink: (name) => { try { history.replaceState(null, '', '#' + name); } catch (e) {} },
+    refresh: () => load(),
+    _start: () => {
+      load();
+      window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 150); });
+      matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', redraw);
+      document.getElementById('bp-refresh')?.addEventListener('click', load);
+      setInterval(load, 10 * 60 * 1000);
+    },
+  };
+})();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<p class="bp-error" id="bp-error" role="alert" hidden></p>
+<style>
+  @font-face { font-family: 'BP Display'; font-style: normal; font-weight: 600; font-display: swap; src: url(data:font/woff2;base64,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) format('woff2'); }
+  .bp { --bp-display: 'BP Display', 'Oswald', 'Arial Narrow', Impact, var(--font-anthropic-sans), sans-serif; }
+  .bp-title { font-family: var(--bp-display) !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: .02em; line-height: 1.05; font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.75rem) !important; }
+  .bp .bp-sechead h2:not(.bp-name), .bp .bp-card h3 { font-family: var(--bp-display); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .bp .bp-sechead h2:not(.bp-name) { font-size: calc(var(--cds-font-size-heading) * 1.25); }
+  .bp-name, .bp-big { font-family: var(--bp-display) !important; font-weight: 600 !important; letter-spacing: .01em; }
+  .bp { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
+  .bp-head { display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+  .bp-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .bp-take { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 70ch; }
+  .bp .bp-take b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bp-sec { display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+  .bp-sechead { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--cds-gap-md); }
+  .bp-sechead h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .bp-name { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; }
+  .bp-pick { display: flex; flex-direction: column; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-pick select { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); min-width: min(100%, 16rem); cursor: pointer; }
+  .bp-pick select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+  .bp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: var(--cds-gap-md); }
+  .bp-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; }
+  .bp-lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .bp-unit { font-size: var(--cds-font-size-body); color: var(--color-fg-muted); margin-left: .2em; }
+  .bp-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-ok { color: var(--color-ok); }
+  .bp-warn { color: var(--color-warn); }
+  .bp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--cds-gap-md); }
+  .bp-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; }
+  .bp-card h3 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .bp-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-chart { position: relative; min-height: 280px; }
+  .bp-chart svg { display: block; overflow: visible; }
+  .bp-chart text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+  .bp-chart .bp-ptlabel { fill: var(--color-fg); font-variant-numeric: tabular-nums; }
+  .bp-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .bp-tip .bp-tipdate { color: var(--cds-text-secondary); }
+  .bp-empty, .bp-failed { min-height: 280px; display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 0; }
+  .bp-failed::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+  .bp-tablewrap { overflow-x: auto; }
+  .bp table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); font-variant-numeric: tabular-nums; }
+  .bp th { text-align: left; font-weight: var(--cds-font-weight-medium); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .bp td { padding: var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .bp th.num, .bp td.num { text-align: right; }
+  .bp-roster tbody tr { cursor: pointer; }
+  .bp-roster tbody tr:hover td { background: var(--cds-surface-popover); }
+  .bp-roster tbody tr:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+  .bp-roster tr.bp-sel td { font-weight: 600; }
+  .bp-roster tr.bp-sel td:first-child { box-shadow: inset 3px 0 0 var(--color-fg); }
+  .bp-pill { display: inline-block; padding: 1px var(--cds-pad-sm); border-radius: 999px; border: 1px solid var(--color-border-line); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-pill.bp-ok { color: var(--color-ok); border-color: currentColor; }
+  .bp-pill.bp-warn { color: var(--color-warn); border-color: currentColor; }
+  .bp-multi { position: relative; min-height: 340px; }
+  .bp-multi svg { display: block; overflow: visible; }
+  .bp-multi text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+  .bp-multi .bp-deadline-label { fill: var(--color-fg); }
+  .bp-multi .bp-line { transition: opacity var(--cds-dur-slow); }
+  .bp-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); list-style: none; margin: 0; padding: 0; font-size: var(--cds-font-size-caption); }
+  .bp-legend button { font: inherit; color: var(--color-fg); background: none; border: 0; padding: 2px 0; display: inline-flex; align-items: center; gap: var(--cds-gap-xs); cursor: pointer; }
+  .bp-legend button:hover, .bp-legend button:focus-visible { text-decoration: underline; }
+  .bp-legend .bp-sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .bp-legend .bp-nodata { color: var(--color-fg-muted); }
+  .bp-keyline { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bp-keyline span { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); }
+  .bp-keyline svg { overflow: visible; }
+  .bp-compact th { padding: 2px var(--cds-pad-sm); }
+  .bp-compact td { padding: 3px var(--cds-pad-sm); font-size: var(--cds-font-size-caption); }
+  .bp-compact .bp-pill { padding: 0 var(--cds-pad-xs); }
+  .bp-teamgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--cds-gap-md); }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  @media (max-width: 560px) { .bp-hide-narrow { display: none; } }
+</style>
+
+<div class="bp">
+  <header class="bp-head" id="top">
+    <h1 class="bp-title">LLC BP Jiujitsu Weight Tracker</h1>
+    <p class="bp-take"><b data-draw="n" data-source="team" data-field="logged">—</b> of <b data-draw="n" data-source="team" data-field="roster">—</b> athletes have logged a weigh-in. <b data-draw="n" data-source="team" data-field="at_target">—</b> are at or under their competition target, and <b data-draw="n" data-source="team" data-field="no_target">—</b> still need a target set. Everyone should reach their target by the week of <b data-draw="deadline">—</b>, <b data-draw="weeksleft">—</b> weeks from this week.</p>
+  </header>
+
+  <section class="bp-sec" id="team">
+    <div class="bp-sechead"><h2>Team overview</h2></div>
+    <div class="bp-card" id="team-chart-card">
+      <h3>Weekly weigh-ins to target</h3>
+      <p class="bp-note">Each line is one athlete's weekly weigh-ins. The dashed part runs from their latest weigh-in to their target weight, which they should reach by the target week. Select a name to open that athlete.</p>
+      <div class="bp-keyline" aria-hidden="true">
+        <span><svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--color-fg-muted)" stroke-width="2"></line></svg>Weighed in</span>
+        <span><svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--color-fg-muted)" stroke-width="2" stroke-dasharray="4 3"></line></svg>Path to target</span>
+        <span><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" transform="rotate(45 5 5)" fill="var(--color-panel)" stroke="var(--color-fg-muted)" stroke-width="1.5"></rect></svg>Target weight</span>
+      </div>
+      <div class="bp-multi dash-skeleton" id="team-chart" data-draw="multi" data-source="weekly summary"></div>
+      <ul class="bp-legend" data-draw="legend" data-source="summary"></ul>
+    </div>
+    <div class="bp-card" id="team-table-card">
+      <h3>Where everyone stands</h3>
+      <p class="bp-note">Latest weekly weigh-in against target. "Per week" is what's left divided by the weeks from the latest weigh-in to the target week.</p>
+      <div class="bp-tablewrap">
+        <table class="bp-roster bp-compact" data-source="summary" data-row-key="athlete">
+          <thead><tr>
+            <th data-field="athlete">Athlete</th>
+            <th class="num" data-field="latest_kg">Latest</th>
+            <th class="num bp-hide-narrow" data-field="target_kg">Target</th>
+            <th class="num" data-field="to_go_kg">Left</th>
+            <th class="num" data-field="per_week_kg">Per week</th>
+            <th data-field="status">Status</th>
+          </tr></thead>
+          <tbody data-draw="roster"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="bp-sec" id="athlete">
+    <div class="bp-sechead"><h2>Athlete detail</h2></div>
+    <div class="bp-sechead">
+      <h2 class="bp-name dash-skeleton" data-draw="aname" data-source="summary" data-field="athlete">—</h2>
+      <div class="bp-pick">
+        <label for="bp-athlete-select">Athlete</label>
+        <select id="bp-athlete-select" data-draw="picker" data-source="summary"></select>
+      </div>
+    </div>
+
+    <div class="bp-tiles">
+      <div class="bp-tile" id="tile-latest">
+        <span class="bp-lbl">Latest weigh-in</span>
+        <span><span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="latest_kg">—</span><span class="bp-unit">kg</span></span>
+        <span class="bp-sub">Week of <span data-draw="tweek" data-source="summary" data-field="latest_week">—</span></span>
+      </div>
+      <div class="bp-tile" id="tile-target">
+        <span class="bp-lbl">Competition target</span>
+        <span><span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="target_kg">—</span><span class="bp-unit">kg</span></span>
+        <span class="bp-sub">From the athlete roster</span>
+      </div>
+      <div class="bp-tile" id="tile-togo">
+        <span class="bp-lbl">Left to target</span>
+        <span><span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="to_go_kg">—</span><span class="bp-unit">kg</span></span>
+        <span class="bp-sub" data-draw="tstatus" data-source="summary" data-field="status">—</span>
+      </div>
+      <div class="bp-tile" id="tile-perweek">
+        <span class="bp-lbl">Needed per week</span>
+        <span><span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="per_week_kg">—</span><span class="bp-unit">kg</span></span>
+        <span class="bp-sub">To reach target by the week of <span data-draw="deadline">—</span></span>
+      </div>
+      <div class="bp-tile" id="tile-change">
+        <span class="bp-lbl">Change since first weigh-in</span>
+        <span><span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="change_kg">—</span><span class="bp-unit">kg</span></span>
+        <span class="bp-sub">First logged week of <span data-draw="tweek" data-source="summary" data-field="first_week">—</span></span>
+      </div>
+      <div class="bp-tile" id="tile-weeks">
+        <span class="bp-lbl">Weeks logged</span>
+        <span class="bp-big dash-skeleton" data-draw="tile" data-source="summary" data-field="weeks_logged">—</span>
+        <span class="bp-sub">One weigh-in counted per week</span>
+      </div>
+    </div>
+
+    <div class="bp-grid">
+      <div class="bp-card" id="trend-card">
+        <h3>Weekly weigh-ins</h3>
+        <p class="bp-note">One point per calendar week (Monday to Sunday). The dashed line runs from the latest weigh-in to the target weight in the target week, when a target is set.</p>
+        <div class="bp-chart dash-skeleton" id="trend" data-draw="trend" data-source="weekly summary"></div>
+      </div>
+      <div class="bp-card" id="log-card">
+        <h3>Weigh-in log</h3>
+        <p class="bp-note">Newest first. If an athlete submits more than once in a week, the latest submission counts.</p>
+        <div class="bp-tablewrap">
+          <table class="bp-log" data-source="weekly" data-row-key="athlete,week">
+            <thead><tr>
+              <th data-field="week">Week of</th>
+              <th class="num" data-field="weight_kg">Weight (kg)</th>
+              <th class="num" data-field="change_kg">Change</th>
+              <th class="bp-hide-narrow" data-field="entered_date">Date entered</th>
+              <th class="num bp-hide-narrow" data-field="submissions">Submissions</th>
+            </tr></thead>
+            <tbody data-draw="log"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  dash.loader('responses', {
+    description: 'Decodes the Form Responses 1 CSV export into one row per submission: timestamp and entered date as ISO text, weight as a number.',
+    fn: ({ answer }) => {
+      const a = typeof answer === 'string' ? JSON.parse(answer) : answer;
+      if (!a || !a.content) throw new Error('Google Drive returned no file content' + (a && a.error ? ': ' + a.error : ''));
+      const bin = atob(a.content);
+      const text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+      const rows = []; let row = [], cell = '', q = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+        else if (ch === '"') q = true;
+        else if (ch === ',') { row.push(cell); cell = ''; }
+        else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+        else cell += ch;
+      }
+      if (cell || row.length) { row.push(cell); rows.push(row); }
+      const head = (rows.shift() || []).map((h) => h.trim().toLowerCase());
+      const col = (re, fallback) => { const i = head.findIndex((h) => re.test(h)); return i >= 0 ? i : fallback; };
+      const iTs = col(/timestamp/, 0), iName = col(/name/, 1), iKg = col(/weight/, 2), iDate = col(/^date$/, 3);
+      const iso = (s) => {
+        const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(String(s || '').trim());
+        if (!m) return null;
+        const p = (n) => String(n || 0).padStart(2, '0');
+        return `${m[3]}-${p(m[1])}-${p(m[2])}` + (m[4] ? `T${p(m[4])}:${p(m[5])}:${p(m[6])}` : '');
+      };
+      const data = rows.filter((r) => r.some((c) => c.trim() !== '')).map((r) => {
+        const kg = parseFloat(r[iKg]);
+        return { timestamp: iso(r[iTs]), athlete: (r[iName] || '').trim(), weight_kg: Number.isFinite(kg) ? kg : null, date: iso(r[iDate]) };
+      });
+      return { columns: ['timestamp', 'athlete', 'weight_kg', 'date'], rows: data };
+    },
+  });
+
+  dash.loader('athletes', {
+    description: 'Finds the roster sheet (the table with an "Athlete" column) in Google Drive’s text version of the spreadsheet and reads each athlete and target weight.',
+    fn: ({ answer }) => {
+      let a = answer;
+      if (typeof a === 'string') { try { a = JSON.parse(a); } catch (e) { a = { fileContent: a }; } }
+      const text = a && a.fileContent;
+      if (!text) throw new Error('Google Drive returned no sheet text');
+      const cells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      for (const sec of text.split('### Sheet Name:').slice(1)) {
+        const lines = sec.split('\n').filter((l) => l.trim().startsWith('|')).map(cells)
+          .filter((c) => !c.every((x) => /^:?-*:?$/.test(x)));
+        const h = lines.findIndex((c) => c.some((x) => /^athlete$/i.test(x)));
+        if (h < 0) continue;
+        const iName = lines[h].findIndex((x) => /^athlete$/i.test(x));
+        const iT = lines[h].findIndex((x) => /target/i.test(x));
+        const rows = lines.slice(h + 1).map((c) => {
+          const t = iT >= 0 ? parseFloat(c[iT]) : NaN;
+          return { athlete: c[iName] || '', target_kg: Number.isFinite(t) ? t : null };
+        }).filter((r) => r.athlete);
+        return { columns: ['athlete', 'target_kg'], rows };
+      }
+      throw new Error('No sheet with an "Athlete" column was found in the spreadsheet');
+    },
+  });
+
+  dash.calc('weekly', {
+    title: 'Weekly weigh-ins per athlete',
+    description: 'One row per athlete per calendar week (Monday to Sunday) of the date they entered; the latest submission in a week counts.',
+    inputs: ['responses'],
+    fn: (responses) => {
+      const monday = (iso) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
+      const byKey = new Map();
+      for (const r of responses) {
+        const day = r.date || (r.timestamp || '').slice(0, 10);
+        if (!r.athlete || r.weight_kg == null || !day) continue;
+        const week = monday(day), key = r.athlete + '|' + week, prev = byKey.get(key);
+        const n = (prev ? prev.submissions : 0) + 1;
+        if (!prev || (r.timestamp || '') >= prev.submitted) byKey.set(key, { athlete: r.athlete, week, weight_kg: r.weight_kg, entered_date: day, submitted: r.timestamp || '', submissions: n });
+        else prev.submissions = n;
+      }
+      const rows = [...byKey.values()].sort((a, b) => a.athlete.localeCompare(b.athlete) || a.week.localeCompare(b.week));
+      rows.forEach((r, i) => { const p = rows[i - 1]; r.change_kg = p && p.athlete === r.athlete ? Math.round((r.weight_kg - p.weight_kg) * 10) / 10 : null; });
+      return rows;
+    },
+  });
+
+  dash.calc('summary', {
+    title: 'Athlete progress to target',
+    description: 'Per athlete: first and latest weekly weigh-in, change, target, kilograms left, and kilograms per week needed to reach target by the target week of Dec 7, 2026.',
+    inputs: ['weekly', 'athletes'],
+    fn: (weekly, athletes) => {
+      const targetWeek = '2026-12-07';
+      const round = (x) => Math.round(x * 10) / 10;
+      const weeksBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 6048e5);
+      const names = [...athletes.map((a) => a.athlete), ...weekly.map((w) => w.athlete)].filter((n, i, all) => n && all.indexOf(n) === i);
+      return names.map((athlete) => {
+        const w = weekly.filter((r) => r.athlete === athlete);
+        const t = athletes.find((a) => a.athlete === athlete);
+        const target = t && t.target_kg != null ? t.target_kg : null;
+        const first = w[0], last = w[w.length - 1];
+        const to_go = last && target != null ? round(last.weight_kg - target) : null;
+        const weeks_to_target = last ? Math.max(0, weeksBetween(last.week, targetWeek)) : null;
+        const per_week = to_go == null ? null : to_go <= 0 ? 0 : weeks_to_target > 0 ? round(to_go / weeks_to_target) : to_go;
+        return {
+          weeks_to_target, per_week_kg: per_week,
+          athlete, on_roster: !!t, target_kg: target,
+          first_week: first ? first.week : null, latest_week: last ? last.week : null,
+          latest_kg: last ? last.weight_kg : null,
+          change_kg: last ? round(last.weight_kg - first.weight_kg) : null,
+          to_go_kg: to_go, weeks_logged: w.length,
+          status: !last ? 'No weigh-ins yet' : target == null ? 'No target set' : to_go <= 0 ? 'At or under target' : 'Above target',
+        };
+      });
+    },
+  });
+
+  dash.calc('team', {
+    title: 'Team counts',
+    description: 'Roster size, and how many athletes have logged a weigh-in, are at or under target, or have no target yet.',
+    inputs: ['summary'],
+    fn: (summary) => {
+      const roster = summary.filter((a) => a.on_roster);
+      return [{
+        roster: roster.length,
+        logged: roster.filter((a) => a.weeks_logged > 0).length,
+        at_target: roster.filter((a) => a.status === 'At or under target').length,
+        no_target: roster.filter((a) => a.target_kg == null).length,
+      }];
+    },
+  });
+
+  window.bp = {
+    targetWeek: '2026-12-07',
+    targetWeekLabel: () => {
+      const d = new Date('2026-12-07T00:00:00Z'), f = d3.utcDay.offset(d, 4);
+      return d3.utcFormat('%b %-d')(d) + '–' + (f.getUTCMonth() === d.getUTCMonth() ? d3.utcFormat('%-d')(f) : d3.utcFormat('%b %-d')(f));
+    },
+    colorOf: (name) => {
+      const s = dash.data('summary');
+      const i = s.status === 'ok' ? s.data.findIndex((r) => r.athlete === name) : 0;
+      return dash.colors[Math.max(0, i) % dash.colors.length];
+    },
+    dashOf: (name) => {
+      const s = dash.data('summary');
+      const i = s.status === 'ok' ? s.data.findIndex((r) => r.athlete === name) : 0;
+      return i >= dash.colors.length ? '1 3' : null;
+    },
+    kg: d3.format('.1f'),
+    signed: (x) => (x > 0 ? '+' : x < 0 ? '-' : '') + d3.format('.1f')(Math.abs(x)),
+    week: (s) => d3.utcFormat('%b %-d')(new Date(s + 'T00:00:00Z')),
+    day: (s) => d3.utcFormat('%b %-d, %Y')(new Date(s + 'T00:00:00Z')),
+    enc: (v) => String(v).replace(/%/g, '%25').replace(/&/g, '%26').replace(/=/g, '%3D').replace(/,/g, '%2C'),
+    current: () => {
+      const s = dash.data('summary');
+      if (s.status !== 'ok' || !s.data.length) return null;
+      const p = dash.params().athlete;
+      if (p && s.data.some((r) => r.athlete === p)) return p;
+      const first = s.data.find((r) => r.weeks_logged > 0) || s.data[0];
+      return first.athlete;
+    },
+    row: () => {
+      const s = dash.data('summary'), name = window.bp.current();
+      return s.status === 'ok' ? s.data.find((r) => r.athlete === name) || null : null;
+    },
+    statusClass: (st) => (st === 'At or under target' ? 'bp-ok' : st === 'Above target' ? 'bp-warn' : ''),
+    failed: () => { const p = document.createElement('p'); p.className = 'bp-failed'; p.textContent = 'Failed to load'; return p; },
+  };
+</script>
+
+<script>
+  const bp = window.bp;
+
+  dash.draw('n', (el) => {
+    const t = dash.data('team');
+    el.textContent = t.status === 'ok' && t.data[0] ? String(t.data[0][el.dataset.field]) : '—';
+  });
+
+  dash.draw('aname', (el) => {
+    const s = dash.data('summary'), r = bp.row();
+    el.classList.toggle('dash-skeleton', s.status === 'loading');
+    if (r) el.setAttribute('data-where', 'athlete=' + bp.enc(r.athlete).replace(/%2C/g, ','));
+    el.textContent = r ? r.athlete : '—';
+  });
+
+  dash.draw('picker', (sel) => {
+    const s = dash.data('summary');
+    const rows = s.status === 'ok' ? s.data : [];
+    sel.replaceChildren(...rows.map((r) => new Option(r.athlete, r.athlete)));
+    sel.value = bp.current() || '';
+    sel.onchange = () => dash.setParams({ athlete: sel.value || null });
+  });
+
+  dash.draw('deadline', (el) => { el.textContent = bp.targetWeekLabel(); });
+
+  dash.draw('weeksleft', (el) => {
+    const now = new Date(), today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const d = new Date(today); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+    el.textContent = String(Math.max(0, Math.round((new Date(bp.targetWeek + 'T00:00:00Z') - d) / 6048e5)));
+  });
+
+  dash.draw('legend', (ul) => {
+    const S = dash.data('summary');
+    ul.replaceChildren();
+    if (S.status !== 'ok') return;
+    for (const a of S.data) {
+      const li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button'; b.dataset.key = a.athlete;
+      const sw = document.createElement('span'); sw.className = 'bp-sw';
+      sw.style.background = a.weeks_logged ? bp.colorOf(a.athlete) : 'var(--color-border-line)';
+      const t = document.createElement('span'); t.textContent = a.athlete;
+      if (!a.weeks_logged) { t.className = 'bp-nodata'; t.textContent = a.athlete + ' (no weigh-ins)'; }
+      b.append(sw, t);
+      b.addEventListener('mouseenter', () => window.bpFocus && window.bpFocus(a.athlete));
+      b.addEventListener('mouseleave', () => window.bpFocus && window.bpFocus(null));
+      b.addEventListener('focus', () => window.bpFocus && window.bpFocus(a.athlete));
+      b.addEventListener('blur', () => window.bpFocus && window.bpFocus(null));
+      b.addEventListener('click', () => window.bpOpen(a.athlete));
+      li.append(b); ul.append(li);
+    }
+  });
+
+  dash.draw('multi', (el) => {
+    const W = dash.data('weekly'), S = dash.data('summary');
+    el.replaceChildren();
+    window.bpFocus = null;
+    el.classList.toggle('dash-skeleton', W.status === 'loading' || S.status === 'loading');
+    if (W.status === 'error' || S.status === 'error') { el.append(bp.failed()); return; }
+    if (W.status !== 'ok' || S.status !== 'ok') return;
+    const tw = new Date(bp.targetWeek + 'T00:00:00Z');
+    const series = S.data.filter((a) => a.weeks_logged > 0).map((a) => {
+      const pts = W.data.filter((w) => w.athlete === a.athlete).map((w) => ({ athlete: a.athlete, week: w.week, kg: w.weight_kg, change: w.change_kg, d: new Date(w.week + 'T00:00:00Z') }));
+      const last = pts[pts.length - 1];
+      const goal = a.target_kg != null ? { athlete: a.athlete, week: bp.targetWeek, kg: a.target_kg, d: tw, goal: true, left: a.to_go_kg, perWeek: a.per_week_kg } : null;
+      return { name: a.athlete, pts, last, goal, color: bp.colorOf(a.athlete), dash: bp.dashOf(a.athlete) };
+    });
+    if (!series.length) {
+      const p = document.createElement('p'); p.className = 'bp-empty'; p.textContent = 'No weigh-ins logged yet.'; el.append(p); return;
+    }
+    const width = Math.max(280, el.clientWidth || 700), height = 340;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+    const all = series.flatMap((s) => s.pts.concat(s.goal ? [s.goal] : []));
+    const [lo, hi] = d3.extent(all, (p) => p.kg);
+    const top = 26, bottom = height - 26;
+    const y = d3.scaleLinear([lo - 2, hi + 2], [bottom, top]).nice();
+    const yTicks = y.ticks(6), yFmt = y.tickFormat(6);
+    const probe = svg.append('g');
+    const tickW = d3.max(yTicks, (t) => probe.append('text').text(yFmt(t)).node().getComputedTextLength()) || 20;
+    probe.remove();
+    const left = Math.ceil(tickW) + 10, right = 14;
+    const dMin = d3.min(all, (p) => p.d);
+    const x = d3.scaleUtc([d3.utcDay.offset(dMin, -3), d3.utcDay.offset(tw, 3)], [left, width - right]);
+
+    svg.append('g').selectAll('line').data(yTicks).join('line')
+      .attr('x1', left).attr('x2', width - right).attr('y1', (t) => y(t)).attr('y2', (t) => y(t))
+      .attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').selectAll('text').data(yTicks).join('text')
+      .attr('x', left - 8).attr('y', (t) => y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').text((t) => yFmt(t));
+    svg.append('text').attr('x', left - 8).attr('y', top - 12).attr('text-anchor', 'end').text('kg');
+
+    const weeks = d3.utcMonday.range(d3.utcDay.offset(dMin, -1), d3.utcDay.offset(tw, 1));
+    const every = Math.max(1, Math.ceil(60 / ((width - left - right) / Math.max(1, weeks.length))));
+    const xTicks = weeks.filter((d, i) => (weeks.length - 1 - i) % every === 0);
+    svg.append('line').attr('x1', left).attr('x2', width - right).attr('y1', bottom).attr('y2', bottom).attr('stroke', 'var(--cds-chart-axis)');
+    svg.append('g').selectAll('text').data(xTicks).join('text')
+      .attr('x', (d) => x(d)).attr('y', bottom + 18).attr('text-anchor', 'middle').text((d) => d3.utcFormat('%b %-d')(d));
+
+    svg.append('rect').attr('x', x(tw) - 8).attr('width', 16).attr('y', top).attr('height', bottom - top)
+      .attr('fill', 'var(--cds-chart-grid)').attr('opacity', 0.6);
+    svg.append('text').attr('class', 'bp-deadline-label').attr('x', Math.min(x(tw), width - right)).attr('y', top - 12)
+      .attr('text-anchor', 'end').text('Target week');
+
+    const line = d3.line().x((p) => x(p.d)).y((p) => y(p.kg));
+    const groups = svg.append('g').selectAll('g').data(series).join('g').attr('class', 'bp-line');
+    groups.append('path').attr('d', (s) => line(s.pts)).attr('fill', 'none').attr('stroke', (s) => s.color)
+      .attr('stroke-dasharray', (s) => s.dash).attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+    groups.filter((s) => s.goal).append('path').attr('d', (s) => line([s.last, s.goal])).attr('fill', 'none')
+      .attr('stroke', (s) => s.color).attr('stroke-width', 1.5).attr('stroke-dasharray', '4 3').attr('opacity', 0.8);
+    groups.selectAll('circle').data((s) => s.pts.map((p) => ({ ...p, color: s.color }))).join('circle')
+      .attr('cx', (p) => x(p.d)).attr('cy', (p) => y(p.kg)).attr('r', 3).attr('fill', (p) => p.color)
+      .attr('stroke', 'var(--color-panel)').attr('stroke-width', 1);
+    groups.filter((s) => s.goal).append('rect')
+      .attr('x', (s) => x(s.goal.d) - 4.5).attr('y', (s) => y(s.goal.kg) - 4.5).attr('width', 9).attr('height', 9)
+      .attr('transform', (s) => `rotate(45 ${x(s.goal.d)} ${y(s.goal.kg)})`)
+      .attr('fill', 'var(--color-panel)').attr('stroke', (s) => s.color).attr('stroke-width', 2);
+
+    window.bpFocus = (name) => groups.attr('opacity', (s) => (!name || s.name === name ? 1 : 0.15));
+
+    const tip = document.createElement('div'); tip.className = 'bp-tip'; tip.hidden = true; el.append(tip);
+    const ring = svg.append('circle').attr('r', 7).attr('fill', 'none').attr('stroke-width', 2).attr('visibility', 'hidden');
+    const targets = all.map((p) => ({ ...p, color: bp.colorOf(p.athlete) }));
+    svg.append('rect').attr('x', left).attr('y', top).attr('width', width - left - right).attr('height', bottom - top)
+      .attr('fill', 'transparent').style('cursor', 'pointer')
+      .on('pointermove', (event) => {
+        const [mx, my] = d3.pointer(event);
+        const p = d3.least(targets, (q) => (x(q.d) - mx) ** 2 + (y(q.kg) - my) ** 2);
+        ring.attr('cx', x(p.d)).attr('cy', y(p.kg)).attr('stroke', p.color).attr('visibility', 'visible');
+        window.bpFocus(p.athlete);
+        const lines = [['bp-tipdate', p.athlete], ['bp-tipdate', p.goal ? 'Target, week of ' + bp.targetWeekLabel() : 'Week of ' + bp.week(p.week)], ['', bp.kg(p.kg) + ' kg']];
+        if (p.goal && p.left != null) lines.push(['bp-tipdate', (p.left > 0 ? bp.kg(p.left) + ' kg left · ' + bp.kg(p.perWeek) + ' kg per week' : 'At or under target')]);
+        if (!p.goal && p.change != null) lines.push(['bp-tipdate', bp.signed(p.change) + ' kg vs previous week']);
+        tip.replaceChildren(...lines.map(([c, t]) => { const d = document.createElement('div'); d.className = c; d.textContent = t; return d; }));
+        tip.hidden = false;
+        const scale = el.clientWidth / width, px = x(p.d) * scale, py = y(p.kg), w = tip.offsetWidth;
+        tip.style.left = Math.min(Math.max(0, px - w / 2), el.clientWidth - w) + 'px';
+        tip.style.top = (py - tip.offsetHeight - 14 < 0 ? py + 14 : py - tip.offsetHeight - 14) + 'px';
+        el.dataset.hover = p.athlete;
+      })
+      .on('pointerleave', () => { tip.hidden = true; ring.attr('visibility', 'hidden'); window.bpFocus(null); delete el.dataset.hover; })
+      .on('click', () => { if (el.dataset.hover) window.bpOpen(el.dataset.hover); });
+  });
+
+  const tileFmt = { latest_kg: bp.kg, target_kg: bp.kg, to_go_kg: bp.signed, per_week_kg: bp.kg, change_kg: bp.signed, weeks_logged: String };
+  dash.draw('tile', (el) => {
+    const s = dash.data('summary'), r = bp.row(), f = el.dataset.field;
+    el.classList.toggle('dash-skeleton', s.status === 'loading');
+    if (r) el.setAttribute('data-where', 'athlete=' + bp.enc(r.athlete).replace(/%2C/g, ','));
+    const v = r ? r[f] : null;
+    el.textContent = v == null ? '—' : tileFmt[f](v);
+    if (f === 'to_go_kg') {
+      el.classList.toggle('bp-ok', v != null && v <= 0);
+      el.classList.toggle('bp-warn', v != null && v > 0);
+    }
+  });
+
+  dash.draw('tweek', (el) => {
+    const r = bp.row(), v = r ? r[el.dataset.field] : null;
+    if (r) el.setAttribute('data-where', 'athlete=' + bp.enc(r.athlete).replace(/%2C/g, ','));
+    el.textContent = v ? bp.week(v) : '—';
+  });
+
+  dash.draw('tstatus', (el) => {
+    const r = bp.row();
+    if (r) el.setAttribute('data-where', 'athlete=' + bp.enc(r.athlete).replace(/%2C/g, ','));
+    el.textContent = r ? r.status : '—';
+    el.className = 'bp-sub ' + (r ? bp.statusClass(r.status) : '');
+  });
+
+  dash.draw('trend', (el) => {
+    const W = dash.data('weekly'), S = dash.data('summary');
+    el.replaceChildren();
+    el.classList.toggle('dash-skeleton', W.status === 'loading' || S.status === 'loading');
+    if (W.status === 'error' || S.status === 'error') { el.append(bp.failed()); return; }
+    if (W.status !== 'ok' || S.status !== 'ok') return;
+    const r = bp.row();
+    if (!r) return;
+    const pts = W.data.filter((w) => w.athlete === r.athlete).map((w) => ({ ...w, d: new Date(w.week + 'T00:00:00Z') }));
+    if (!pts.length) {
+      const p = document.createElement('p'); p.className = 'bp-empty';
+      p.textContent = 'No weigh-ins logged yet for this athlete.'; el.append(p); return;
+    }
+    const target = r.target_kg;
+    const width = Math.max(260, el.clientWidth || 600), height = 280;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+
+    const vals = pts.map((p) => p.weight_kg).concat(target != null ? [target] : []);
+    const [lo, hi] = d3.extent(vals);
+    const pad = Math.max(1, (hi - lo) * 0.2);
+    const top = 22, bottom = height - 26;
+    const y = d3.scaleLinear([lo - pad, hi + pad], [bottom, top]).nice();
+    const yTicks = y.ticks(5), yFmt = y.tickFormat(5);
+    const probe = svg.append('g');
+    const tickW = d3.max(yTicks, (t) => probe.append('text').text(yFmt(t)).node().getComputedTextLength()) || 20;
+    probe.remove();
+    const left = Math.ceil(tickW) + 10, right = 18;
+
+    const tw = new Date(bp.targetWeek + 'T00:00:00Z');
+    const dMin = d3.min(pts, (p) => p.d), dMax = d3.max(pts.map((p) => p.d).concat(target != null ? [tw] : []));
+    const x = d3.scaleUtc([d3.utcDay.offset(dMin, -4), d3.utcDay.offset(dMax, 4)], [left, width - right]);
+
+    svg.append('g').selectAll('line').data(yTicks).join('line')
+      .attr('x1', left).attr('x2', width - right).attr('y1', (t) => y(t)).attr('y2', (t) => y(t))
+      .attr('stroke', 'var(--cds-chart-grid)').attr('stroke-width', 1);
+    svg.append('g').selectAll('text').data(yTicks).join('text')
+      .attr('x', left - 8).attr('y', (t) => y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').text((t) => yFmt(t));
+
+    const lastPt = pts[pts.length - 1];
+    const step = pts.length > 1 ? (x(lastPt.d) - x(dMin)) / (pts.length - 1) : width;
+    const weeks = d3.utcMonday.range(d3.utcDay.offset(dMin, -1), d3.utcDay.offset(dMax, 1));
+    const every = Math.max(1, Math.ceil(56 / ((width - left - right) / Math.max(1, weeks.length))));
+    const xTicks = weeks.filter((d, i) => (weeks.length - 1 - i) % every === 0);
+    svg.append('line').attr('x1', left).attr('x2', width - right).attr('y1', bottom).attr('y2', bottom).attr('stroke', 'var(--cds-chart-axis)');
+    svg.append('g').selectAll('text').data(xTicks).join('text')
+      .attr('x', (d) => x(d)).attr('y', bottom + 18).attr('text-anchor', 'middle').text((d) => d3.utcFormat('%b %-d')(d));
+
+    const color = bp.colorOf(r.athlete);
+    if (target != null) {
+      svg.append('line').attr('x1', left).attr('x2', width - right).attr('y1', y(target)).attr('y2', y(target))
+        .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-width', 1).attr('stroke-dasharray', '2 4');
+      svg.append('path').attr('d', d3.line()([[x(lastPt.d), y(lastPt.weight_kg)], [x(tw), y(target)]]))
+        .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 1.5).attr('stroke-dasharray', '4 3').attr('opacity', 0.8);
+      svg.append('rect').attr('x', x(tw) - 5).attr('y', y(target) - 5).attr('width', 10).attr('height', 10)
+        .attr('transform', `rotate(45 ${x(tw)} ${y(target)})`).attr('fill', 'var(--color-panel)').attr('stroke', color).attr('stroke-width', 2);
+      svg.append('text').attr('class', 'bp-ptlabel').attr('x', x(tw)).attr('y', y(target) + (y(target) > y(lastPt.weight_kg) ? 20 : -12))
+        .attr('text-anchor', 'end').text('Target ' + bp.kg(target));
+    }
+
+    svg.append('path').datum(pts)
+      .attr('d', d3.line().x((p) => x(p.d)).y((p) => y(p.weight_kg)))
+      .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+    svg.append('g').selectAll('circle').data(pts).join('circle')
+      .attr('cx', (p) => x(p.d)).attr('cy', (p) => y(p.weight_kg)).attr('r', (p, i) => (i === pts.length - 1 ? 5 : 3.5))
+      .attr('fill', color).attr('stroke', 'var(--color-panel)').attr('stroke-width', 1.5);
+
+    const labelled = step >= 40 ? pts : [pts[pts.length - 1]];
+    svg.append('g').selectAll('text').data(labelled).join('text').attr('class', 'bp-ptlabel')
+      .attr('x', (p) => x(p.d)).attr('y', (p) => y(p.weight_kg) - 10).attr('text-anchor', 'middle').text((p) => bp.kg(p.weight_kg));
+
+    const tip = document.createElement('div'); tip.className = 'bp-tip'; tip.hidden = true; el.append(tip);
+    const dot = svg.append('circle').attr('r', 7).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('visibility', 'hidden');
+    svg.append('rect').attr('x', left).attr('y', top).attr('width', width - left - right).attr('height', bottom - top)
+      .attr('fill', 'transparent')
+      .on('pointermove', (event) => {
+        const [mx] = d3.pointer(event);
+        const p = d3.least(pts, (q) => Math.abs(x(q.d) - mx));
+        dot.attr('cx', x(p.d)).attr('cy', y(p.weight_kg)).attr('visibility', 'visible');
+        const lines = [['bp-tipdate', 'Week of ' + bp.week(p.week)], ['', bp.kg(p.weight_kg) + ' kg']];
+        if (p.change_kg != null) lines.push(['bp-tipdate', bp.signed(p.change_kg) + ' kg vs previous week']);
+        if (target != null) lines.push(['bp-tipdate', bp.signed(Math.round((p.weight_kg - target) * 10) / 10) + ' kg vs target']);
+        tip.replaceChildren(...lines.map(([c, t]) => { const d = document.createElement('div'); d.className = c; d.textContent = t; return d; }));
+        tip.hidden = false;
+        const scale = el.clientWidth / width;
+        const px = x(p.d) * scale, py = y(p.weight_kg);
+        const tw = tip.offsetWidth;
+        tip.style.left = Math.min(Math.max(0, px - tw / 2), el.clientWidth - tw) + 'px';
+        tip.style.top = Math.max(0, py - tip.offsetHeight - 14) + 'px';
+      })
+      .on('pointerleave', () => { tip.hidden = true; dot.attr('visibility', 'hidden'); });
+  });
+
+  dash.draw('log', (tb) => {
+    const W = dash.data('weekly'), r = bp.row();
+    tb.replaceChildren();
+    if (W.status !== 'ok' || !r) return;
+    const rows = W.data.filter((w) => w.athlete === r.athlete).slice().reverse();
+    if (!rows.length) {
+      const tr = document.createElement('tr'); const td = document.createElement('td');
+      td.colSpan = 5; td.className = 'bp-note'; td.textContent = 'No weigh-ins logged yet.'; tr.append(td); tb.append(tr); return;
+    }
+    for (const w of rows) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = encodeURIComponent(w.athlete) + ',' + encodeURIComponent(w.week);
+      const cells = [
+        ['', bp.week(w.week)],
+        ['num', bp.kg(w.weight_kg)],
+        ['num', w.change_kg == null ? '—' : bp.signed(w.change_kg)],
+        ['bp-hide-narrow', bp.day(w.entered_date)],
+        ['num bp-hide-narrow', String(w.submissions)],
+      ];
+      for (const [c, t] of cells) { const td = document.createElement('td'); td.className = c; td.textContent = t; tr.append(td); }
+      tb.append(tr);
+    }
+  });
+
+  dash.draw('roster', (tb) => {
+    const S = dash.data('summary');
+    tb.replaceChildren();
+    if (S.status !== 'ok') return;
+    const cur = bp.current();
+    for (const a of S.data) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = a.athlete; tr.tabIndex = 0;
+      if (a.athlete === cur) tr.className = 'bp-sel';
+      const cells = [
+        ['', a.athlete],
+        ['num', a.latest_kg == null ? '—' : bp.kg(a.latest_kg)],
+        ['num bp-hide-narrow', a.target_kg == null ? '—' : bp.kg(a.target_kg)],
+        ['num', a.to_go_kg == null ? '—' : bp.signed(a.to_go_kg)],
+        ['num', a.per_week_kg == null ? '—' : bp.kg(a.per_week_kg)],
+      ];
+      for (const [c, t] of cells) { const td = document.createElement('td'); td.className = c; td.textContent = t; tr.append(td); }
+      const td = document.createElement('td'); const pill = document.createElement('span');
+      pill.className = 'bp-pill ' + bp.statusClass(a.status); pill.textContent = a.status; td.append(pill); tr.append(td);
+      tb.append(tr);
+    }
+  });
+
+  window.bpOpen = (name) => {
+    if (!name) return;
+    dash.setParams({ athlete: name });
+    document.querySelectorAll('#athlete').forEach((s) => s.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    dash.setLink('athlete');
+  };
+  const open = (row) => { if (row) window.bpOpen(row.dataset.key); };
+  document.querySelectorAll('.bp-roster').forEach((t) => {
+    t.addEventListener('click', (e) => open(e.target.closest('tr[data-key]')));
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e.target.closest('tr[data-key]')); } });
+  });
+</script>
+
+<footer class="bp-foot">
+  <span id="bp-loaded">Loading…</span>
+  <button type="button" id="bp-refresh">Refresh data</button>
+  <span>Data: weekly weigh-in form and athlete roster (Google Sheets).</span>
+</footer>
+</div>
+<script>window.dash._start();</script>
+</body>
+</html>
